@@ -172,14 +172,26 @@ export default function ModelViewer({ modelSpec, title }) {
         meshes = isManualScene ? buildManualMeshes(inputParts).meshes : buildBuildingMeshes(inputParts);
         meshes.forEach(m => group.add(m));
       }
+      // A successful scene build must contain actual renderable geometry.
+      // Previously an empty/invalid architectural group could leave the
+      // viewer showing only the sky backdrop, which looked like a successful
+      // render even though the model itself was missing.
+      if (!meshes.length) throw new Error('The 3D engine produced no renderable model meshes.');
+      meshes.forEach((m) => { m.visible = true; });
       meshesRef.current = meshes;
       scene.add(group);
 
+      // Frame ONLY the architectural model here. Ground, compound walls and
+      // presentation helpers are added afterwards and must never influence
+      // the camera target/framing. Guard against invalid bounds so a NaN/
+      // infinite coordinate cannot silently point the camera into empty sky.
       const box = new THREE.Box3().setFromObject(group);
       const size = new THREE.Vector3();
       const center = new THREE.Vector3();
       box.getSize(size);
       box.getCenter(center);
+      const finiteBounds = [box.min.x, box.min.y, box.min.z, box.max.x, box.max.y, box.max.z, center.x, center.y, center.z, size.x, size.y, size.z].every(Number.isFinite);
+      if (!finiteBounds || size.length() <= 0) throw new Error('The 3D model has invalid or empty geometry bounds.');
       const maxDim = Math.max(size.x, size.y, size.z, 0.2);
       const radius = maxDim / 2;
 
@@ -250,18 +262,24 @@ export default function ModelViewer({ modelSpec, title }) {
       interiorFillRef.current = interiorFills;
 
       camera.near = Math.max(radius / 500, 0.01);
-      camera.far = radius * 60 + 100;
+      camera.far = Math.max(radius * 80 + 100, 100);
       camera.updateProjectionMatrix();
 
-      // Framed wide enough to include the compound wall by default (not
-      // just the bare building), so the wall/gate are visible on first
-      // load instead of only after zooming out.
-      const dist = Math.max(radius * 2.6, compoundSpan * 0.95);
-      camera.position.set(center.x + dist * 0.65, center.y + dist * 0.5, center.z + dist * 0.7);
+      // Robust architectural framing. The old fixed multiplier could place
+      // the camera too close on phone-sized viewports, while invalid bounds
+      // could leave it aimed into the sky. Compute the distance from the
+      // actual camera FOV/aspect and then add comfortable presentation space.
+      const vFov = THREE.MathUtils.degToRad(camera.fov);
+      const fitHeight = (size.y || maxDim) / (2 * Math.tan(vFov / 2));
+      const fitWidth = (size.x || maxDim) / (2 * Math.tan(vFov / 2) * Math.max(camera.aspect, 0.5));
+      const fitDistance = Math.max(fitHeight, fitWidth, maxDim * 0.8);
+      const dist = Math.max(fitDistance * 1.35, compoundSpan * 0.9, 8);
+      camera.position.set(center.x + dist * 0.72, center.y + dist * 0.52, center.z + dist * 0.72);
       controls.target.copy(center);
-      controls.minDistance = radius * 0.25;
-      controls.maxDistance = radius * 6;
+      controls.minDistance = Math.max(radius * 0.15, 0.5);
+      controls.maxDistance = Math.max(radius * 12, 30);
       controls.update();
+      camera.lookAt(center);
 
       const gridSize = Math.max(maxDim * 2.5, 4);
       const grid = new THREE.GridHelper(gridSize, 24, 0x3a4048, 0x1c2027);

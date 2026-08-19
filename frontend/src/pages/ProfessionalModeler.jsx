@@ -16,7 +16,7 @@ import { phase5ModelReport, wallJoinReport, roofPlaneSchedule } from '../three/a
 import { bimManifest, materialAssemblies } from '../three/architecture/bimData.js';
 import { ensureParametricData, deriveAssociativeDimensions, deriveModelTags, deriveLevelAndGridDatums, wallAssemblySchedule, phase6Manifest, validatePhase6, PHASE6_SCHEMA } from '../three/architecture/phase6Systems.js';
 import { phase7ProductionData, phase7Manifest, validatePhase7, PHASE7_SCHEMA, stairProductionCheck } from '../three/architecture/phase7Systems.js';
-import { regenerateDocumentation, phase8Manifest, validatePhase8, PHASE8_SCHEMA, editWall, deriveViewDefinitions, deriveDrawingSheets } from '../three/architecture/phase8Systems.js';
+import { regenerateDocumentation, phase8Manifest, validatePhase8, PHASE8_SCHEMA, editWall, offsetWall, trimWallTo, deriveViewDefinitions, deriveDrawingSheets } from '../three/architecture/phase8Systems.js';
 import { saveManualProject } from '../api/client';
 import { regeneratePhase9Documentation, validatePhase9, phase9Manifest, PHASE9_SCHEMA, deriveArchitecturalDimensions, derivePlanAnnotations, deriveSectionMarkers } from '../three/architecture/phase9Systems.js';
 import { normalizePhase10, deriveStructuralGrid, deriveFoundationSchedule, deriveRoofConstruction, deriveCeilingSystems, deriveConstructionAssemblies, deriveMepCoordination, deriveIfcData, phase10Manifest, validatePhase10, PHASE10_SCHEMA } from '../three/architecture/phase10Systems.js';
@@ -25,7 +25,7 @@ import { normalizePhase12, regeneratePhase12Associativity, phase12Coordination, 
 import { normalizePhase13, buildDependencyGraph, propagateAssociativity, beginTransaction, commitTransaction, createModelVersion, restoreModelVersion, moveWallGrip, calculateConstructionTakeoff, validatePhase13, phase13Manifest, PHASE13_SCHEMA } from '../three/architecture/phase13Systems.js';
 import { normalizePhase14, editWallGrip, moveOpeningAlongWall, snapPoint, wallSnapCandidates, syncPhase14, validatePhase14, phase14Manifest, PHASE14_SCHEMA } from '../three/architecture/phase14Systems.js';
 import { normalizePhase15, regeneratePhase15, propagatePhase15, validatePhase15, phase15Manifest, phase15ChangeImpact, PHASE15_SCHEMA } from '../three/architecture/phase15Systems.js';
-import { normalizePhase16, offsetWall, trimWallTo, extendWallTo, joinWalls, regeneratePhase16, validatePhase16, phase16Manifest, PHASE16_SCHEMA } from '../three/architecture/phase16Systems.js';
+import { normalizePhase16, extendWallTo, joinWalls, regeneratePhase16, validatePhase16, phase16Manifest, PHASE16_SCHEMA } from '../three/architecture/phase16Systems.js';
 import { normalizePhase17, createParallelWall, splitWallAt, mergeWalls, setOpeningFamily as setOpeningFamily17, resolveWallTopology, openingPlanSymbol, phase17Manifest, validatePhase17, OPENING_FAMILIES, PHASE17_SCHEMA } from '../three/architecture/phase17Systems.js';
 import { normalizePhase18, apply3DTransform, setPhase18TransformMode, setPhase18ConstructionView, phase18Manifest, validatePhase18, PHASE18_SCHEMA } from '../three/architecture/phase18Systems.js';
 import { normalizePhase19, normalizePhase19Associativity, setOpeningFamily, setWallFaceOffsets, phase19Manifest, validatePhase19, DOOR_FAMILIES, WINDOW_FAMILIES, PHASE19_SCHEMA } from '../three/architecture/phase19Systems.js';
