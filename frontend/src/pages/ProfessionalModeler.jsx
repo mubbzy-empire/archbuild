@@ -175,12 +175,26 @@ export default function ProfessionalModeler() {
     const pmrem = new THREE.PMREMGenerator(renderer); scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture; pmrem.dispose();
     scene.add(new THREE.HemisphereLight(0xe9eef3, 0x222831, 1.3)); const sun = new THREE.DirectionalLight(0xffffff, 1.6); sun.position.set(15, 20, 10); sun.castShadow = true; scene.add(sun);
     const grid = new THREE.GridHelper(80, 80, 0x303841, 0x1b222a); scene.add(grid);
-    const { group } = buildBuildingGroup(building); scene.add(group);
+    const { group } = buildBuildingGroup(building);
+    const invalid = [];
+    group.traverse(o => {
+      if (!o.isMesh) return;
+      const pos = o.geometry?.getAttribute?.('position');
+      let valid = !!pos && pos.count > 0;
+      if (valid) for (let i = 0; i < pos.count; i++) { if (![pos.getX(i), pos.getY(i), pos.getZ(i)].every(Number.isFinite)) { valid = false; break; } }
+      if (!valid) invalid.push(o);
+    });
+    invalid.forEach(o => o.removeFromParent());
+    if (!group.getObjectByProperty('isMesh', true)) throw new Error('The 3D engine produced no valid renderable model geometry.');
+    scene.add(group);
     group.traverse(o => {
       if (o.name === 'structural_system') o.visible = showStructure;
       if (o.name === 'mep_systems' || o.userData.discipline === 'mep' || o.userData.discipline === 'electrical' || o.userData.discipline === 'plumbing' || o.userData.discipline === 'hvac' || o.userData.discipline === 'fire') o.visible = showMep || phase18ConstructionView === 'mep';
-      if (o.name === 'roof') o.visible = showRoof;
-      if (o.userData.group === 'interior') o.visible = showInterior;
+      if (o.name === 'roof') o.visible = showRoof && !showInterior;
+      if (showInterior && o.userData.interiorSurface === 'ceiling') o.visible = false;
+      if (showInterior && o.isMesh && o.userData.wallType === 'exterior') o.visible = false;
+      if (showInterior && o.isMesh && (o.userData.group === 'window' || o.userData.group === 'door') && o.userData.wallType === 'exterior') o.visible = false;
+      if (!showInterior && o.userData.group === 'interior') o.visible = true;
       if (phase18ConstructionView === 'structure' && o.userData.discipline === 'mep') o.visible = false;
       if (o.isMesh) o.userData.baseOpacity = o.material?.opacity ?? 1;
     });

@@ -41,6 +41,8 @@ export function buildOpeningFill(wall, opening) {
   group.userData.openingId = opening.id;
   group.userData.room = opening.room;
   group.userData.material = opening.type === 'window' ? 'glazing' : opening.type;
+  group.userData.wallType = wall.type;
+  group.userData.floor = wall.floor;
 
   const w = opening.width, h = opening.height, wallT = wall.thickness;
   const frameDepth = Math.max(wallT * 0.9, 0.06);
@@ -57,7 +59,7 @@ export function buildOpeningFill(wall, opening) {
   // individual mesh's userData.group — apply consistently across the whole
   // opening, not just its parent Group.
   const label = group.userData.group;
-  group.traverse((obj) => { if (obj.isMesh && !obj.userData.group) obj.userData.group = label; });
+  group.traverse((obj) => { if (obj.isMesh) { if (!obj.userData.group) obj.userData.group = label; obj.userData.wallType = wall.type; obj.userData.floor = wall.floor; } });
   return group;
 }
 

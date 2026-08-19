@@ -188,34 +188,104 @@ export function createBuilding({
 // Fills in anything left implicit (elevations from heights, ids, sorted
 // level order) so downstream generators never have to guard against
 // missing fields. Always run a building through this before rendering.
-export function normalizeBuilding(building) {
-  building.site ||= { boundary: null, setbacks: { front: 3, rear: 3, left: 1.5, right: 1.5 }, road: { width: 5, z: null } };
-  building.documentation ||= { dimensions: [], notes: [], grids: [], views: [], tags: [] };
-  building.documentation.tags ||= [];
-  building.datums ||= { levels: [], grids: [] };
-  building.parametric ||= { wallAssemblies: {}, openingFamilies: {}, constraints: [] };
-  building.metadata ||= {};
-  building.metadata.schema ||= 'archvision-bim-0.6';
-  building.structural ||= { strategy: 'reinforced-concrete-design-intent' };
-  building.systems ||= {};
-  for (const k of ['electrical','plumbing','drainage','hvac','fire']) building.systems[k] ||= { routes: [] };
-  const levels = [...building.levels].sort((a, b) => a.index - b.index);
+export function normalizeBuilding(building = {}) {
+  // AI/legacy routes can hand the renderer partially-shaped data. Normalize
+  // it at the boundary so every downstream geometry phase receives finite
+  // coordinate arrays instead of throwing on expressions such as p[0].
+  const source = building && typeof building === 'object' ? building : {};
+  const finitePair = (p, fallback = [0, 0]) => {
+    if (!Array.isArray(p) || p.length < 2) return [...fallback];
+    const x = Number(p[0]), z = Number(p[1]);
+    return Number.isFinite(x) && Number.isFinite(z) ? [x, z] : [...fallback];
+  };
+  const cleanPolygon = (poly, fallback = null) => {
+    if (!Array.isArray(poly)) return fallback ? fallback.map(finitePair) : null;
+    const out = poly.map(p => finitePair(p, [NaN, NaN])).filter(p => Number.isFinite(p[0]) && Number.isFinite(p[1]));
+    return out.length >= 3 ? out : (fallback ? fallback.map(finitePair) : null);
+  };
+  const defaultFootprint = [[-6, -5], [6, -5], [6, 5], [-6, 5]];
+  const levelsInput = Array.isArray(source.levels) ? source.levels : [];
+  const levels = levelsInput.map((raw, index) => {
+    const level = raw && typeof raw === 'object' ? raw : {};
+    const height = Number.isFinite(Number(level.height)) && Number(level.height) > 0 ? Number(level.height) : 3;
+    const indexValue = Number.isFinite(Number(level.index)) ? Number(level.index) : index + 1;
+    const elevation = Number.isFinite(Number(level.elevation)) ? Number(level.elevation) : null;
+    let footprint = cleanPolygon(level.footprint);
+    const rawWalls = Array.isArray(level.walls) ? level.walls : [];
+    if (!footprint) {
+      const pts = rawWalls.flatMap(w => [w?.start, w?.end]).filter(Array.isArray).map(p => finitePair(p, [NaN, NaN])).filter(p => Number.isFinite(p[0]) && Number.isFinite(p[1]));
+      if (pts.length >= 3) {
+        const xs = pts.map(p => p[0]), zs = pts.map(p => p[1]);
+        footprint = [[Math.min(...xs), Math.min(...zs)], [Math.max(...xs), Math.min(...zs)], [Math.max(...xs), Math.max(...zs)], [Math.min(...xs), Math.max(...zs)]];
+      } else footprint = defaultFootprint.map(p => [...p]);
+    }
+    const walls = rawWalls.map((rawWall, wi) => {
+      const w = rawWall && typeof rawWall === 'object' ? rawWall : {};
+      const start = finitePair(w.start, footprint[0]);
+      const end = finitePair(w.end, footprint[1]);
+      const thickness = Number.isFinite(Number(w.thickness)) && Number(w.thickness) > 0 ? Number(w.thickness) : (w.type === 'interior' ? 0.12 : 0.2);
+      const wallHeight = Number.isFinite(Number(w.height)) && Number(w.height) > 0 ? Number(w.height) : height;
+      const openings = Array.isArray(w.openings) ? w.openings.map(o => normalizeOpening(o || {})).filter(o => Number.isFinite(o.width) && Number.isFinite(o.height) && o.width > 0 && o.height > 0) : [];
+      return {
+        ...w,
+        id: w.id || nextId('wall'), start, end, thickness, height: wallHeight,
+        baseElevation: Number.isFinite(Number(w.baseElevation)) ? Number(w.baseElevation) : (elevation ?? 0),
+        type: w.type || 'exterior', material: w.material || 'plaster', floor: indexValue,
+        rooms: Array.isArray(w.rooms) ? w.rooms.filter(Boolean) : [],
+        roomSpans: Array.isArray(w.roomSpans) ? w.roomSpans.filter(Boolean) : [], openings,
+      };
+    }).filter(w => Math.hypot(w.end[0] - w.start[0], w.end[1] - w.start[1]) > 0.03);
+    const rooms = (Array.isArray(level.rooms) ? level.rooms : []).map((rawRoom, ri) => {
+      const r = rawRoom && typeof rawRoom === 'object' ? rawRoom : {};
+      const polygon = cleanPolygon(r.polygon);
+      if (!polygon) return null;
+      return { ...r, id: r.id || nextId('room'), name: r.name || `Room ${ri + 1}`, type: r.type || 'generic', floor: indexValue, polygon, ceilingHeight: Number.isFinite(Number(r.ceilingHeight)) ? Number(r.ceilingHeight) : height - 0.05 };
+    }).filter(Boolean);
+    const components = (Array.isArray(level.components) ? level.components : []).map((c, ci) => {
+      if (!c || typeof c !== 'object') return null;
+      const position = Array.isArray(c.position) && c.position.length >= 3 ? [Number(c.position[0]), Number(c.position[1]), Number(c.position[2])] : [0, (elevation ?? 0) + 0.5, 0];
+      const size = Array.isArray(c.size) && c.size.length >= 3 ? [Number(c.size[0]), Number(c.size[1]), Number(c.size[2])] : [0.5, 0.5, 0.5];
+      if (![...position, ...size].every(Number.isFinite)) return null;
+      return { ...c, id: c.id || nextId('component'), position, size: size.map(v => Math.max(0.02, Math.abs(v))) };
+    }).filter(Boolean);
+    return { ...level, id: level.id || nextId('level'), index: indexValue, elevation, height, footprint, walls, rooms, components, balconies: Array.isArray(level.balconies) ? level.balconies : [], terraces: Array.isArray(level.terraces) ? level.terraces : [] };
+  });
+
+  const normalized = {
+    ...source,
+    id: source.id || nextId('bldg'),
+    name: source.name || 'Building',
+    site: { boundary: null, setbacks: { front: 3, rear: 3, left: 1.5, right: 1.5 }, road: { width: 5, z: null }, ...(source.site || {}) },
+    levels: levels.length ? levels : [{ id: nextId('level'), index: 1, elevation: 0, height: 3, footprint: defaultFootprint.map(p => [...p]), walls: [], rooms: [], components: [], balconies: [], terraces: [] }],
+    stairs: Array.isArray(source.stairs) ? source.stairs.filter(Boolean) : [],
+    roof: source.roof && typeof source.roof === 'object' ? { ...createRoof(), ...source.roof } : createRoof(),
+    exterior: { compoundWall: false, gate: false, porch: false, canopy: false, paving: true, garage: null, ...(source.exterior || {}) },
+    systems: { electrical: { routes: [] }, plumbing: { routes: [] }, drainage: { routes: [] }, hvac: { routes: [] }, fire: { routes: [] }, ...(source.systems || {}) },
+    metadata: { ...(source.metadata || {}) },
+    documentation: { dimensions: [], notes: [], grids: [], views: [], tags: [], ...(source.documentation || {}) },
+    datums: { levels: [], grids: [], ...(source.datums || {}) },
+    parametric: { wallAssemblies: {}, openingFamilies: {}, constraints: [], ...(source.parametric || {}) },
+    structural: { strategy: 'reinforced-concrete-design-intent', ...(source.structural || {}) },
+  };
+  normalized.metadata.schema ||= 'archvision-bim-0.6';
+  for (const k of ['electrical','plumbing','drainage','hvac','fire']) normalized.systems[k] ||= { routes: [] };
+  normalized.documentation.tags ||= [];
+
+  normalized.levels.sort((a, b) => a.index - b.index);
   let runningElevation = 0;
-  for (const level of levels) {
-    level.walls ||= []; level.rooms ||= []; level.components ||= []; level.balconies ||= []; level.terraces ||= [];
+  for (const level of normalized.levels) {
     if (level.elevation == null) level.elevation = runningElevation;
-    runningElevation = level.elevation + (level.height ?? 3.0);
+    level.baseElevation = level.elevation;
+    runningElevation = level.elevation + level.height;
     for (const wall of level.walls) {
-      if (wall.baseElevation == null) wall.baseElevation = level.elevation;
-      if (wall.height == null) wall.height = level.height;
-      if (!wall.id) wall.id = nextId('wall');
+      wall.floor = level.index;
+      wall.baseElevation = Number.isFinite(Number(wall.baseElevation)) ? Number(wall.baseElevation) : level.elevation;
+      wall.height = Number.isFinite(Number(wall.height)) && wall.height > 0 ? Number(wall.height) : level.height;
       wall.openings = (wall.openings || []).map(normalizeOpening);
     }
-    for (const room of level.rooms) {
-      if (!room.id) room.id = nextId('room');
-    }
+    for (const room of level.rooms) if (!room.id) room.id = nextId('room');
   }
-  return { ...building, levels };
+  return normalized;
 }
 
 export function topLevel(building) {

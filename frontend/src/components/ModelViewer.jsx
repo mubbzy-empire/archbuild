@@ -7,6 +7,7 @@ import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { GROUP_LABELS, getShadowTexture, buildBuildingMeshes, buildManualMeshes } from '../three/buildParts';
 import { applySkyBackground, buildOutdoorGround, addDaylight, buildCompoundWall } from '../three/skyEnvironment';
 import { buildBuildingGroup, generateBuildingFromBrief } from '../three/architecture';
+import { normalizeBuilding } from '../three/architecture/buildingModel.js';
 import PartInfoPanel from './PartInfoPanel';
 
 // Phase 1 sample briefs for the new architectural engine — lets you compare
@@ -18,93 +19,6 @@ const ARCHITECTURE_DEMO_BRIEFS = {
   duplex: { name: '4-Bedroom Modern Duplex', floors: 2, footprint: { width: 12, depth: 10 }, setbackPerFloor: [{ width: 10.5, depth: 9 }], bedrooms: 4, roofType: 'flat', style: 'modern', features: { garage: true, compoundWall: true, gate: true } },
   threeStorey: { name: '3-Storey Modern House', floors: 3, footprint: { width: 13, depth: 10.5 }, setbackPerFloor: [{ width: 11.5, depth: 9.5 }, { width: 10, depth: 8.5 }], bedrooms: 5, roofType: 'flat', style: 'modern', features: { garage: true } },
 };
-
-
-function addInteriorFurnishings(scene, building) {
-  if (!building?.levels?.length) return null;
-  const furniture = new THREE.Group();
-  furniture.name = 'interior_furnishings';
-  furniture.userData.group = 'interior-furniture';
-
-  const mats = {
-    wood: new THREE.MeshStandardMaterial({ color: 0x8a6040, roughness: 0.72 }),
-    lightWood: new THREE.MeshStandardMaterial({ color: 0xb89468, roughness: 0.68 }),
-    fabric: new THREE.MeshStandardMaterial({ color: 0xc8c3bb, roughness: 0.9 }),
-    dark: new THREE.MeshStandardMaterial({ color: 0x34363a, roughness: 0.7 }),
-    white: new THREE.MeshStandardMaterial({ color: 0xe7e3da, roughness: 0.82 }),
-    green: new THREE.MeshStandardMaterial({ color: 0x60755d, roughness: 0.9 }),
-    metal: new THREE.MeshStandardMaterial({ color: 0x555b62, metalness: 0.55, roughness: 0.35 }),
-  };
-
-  const box = (w, h, d, x, y, z, mat, parent = furniture) => {
-    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
-    m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true;
-    m.userData.group = 'interior-furniture';
-    parent.add(m); return m;
-  };
-  const cyl = (r, h, x, y, z, mat, parent = furniture) => {
-    const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, 20), mat);
-    m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true;
-    m.userData.group = 'interior-furniture';
-    parent.add(m); return m;
-  };
-  const center = (poly) => {
-    if (!poly?.length) return [0, 0];
-    return poly.reduce((a,p)=>[a[0]+p[0],a[1]+p[1]],[0,0]).map(v=>v/poly.length);
-  };
-  const bounds = (poly) => {
-    const xs=poly.map(p=>p[0]), zs=poly.map(p=>p[1]);
-    return { minX:Math.min(...xs), maxX:Math.max(...xs), minZ:Math.min(...zs), maxZ:Math.max(...zs) };
-  };
-
-  for (const level of building.levels) {
-    for (const room of (level.rooms || [])) {
-      const c=center(room.polygon), b=bounds(room.polygon);
-      const w=Math.max(0.8,b.maxX-b.minX), d=Math.max(0.8,b.maxZ-b.minZ);
-      const y=level.elevation;
-      const type=String(room.type||'').toLowerCase();
-
-      if (type === 'bedroom') {
-        const bedW=Math.min(1.8, w*0.62), bedD=Math.min(2.05, d*0.5);
-        const bx=Math.min(b.maxX-bedW/2-0.25, Math.max(b.minX+bedW/2+0.25,c[0]));
-        const bz=Math.min(b.maxZ-bedD/2-0.3, Math.max(b.minZ+bedD/2+0.3,c[1]+0.15));
-        box(bedW,0.32,bedD,bx,y+0.18,bz,mats.lightWood);
-        box(bedW-0.12,0.12,bedD-0.18,bx,y+0.42,bz,mats.white);
-        box(bedW,0.85,0.12,bx,y+0.58,bz-bedD/2+0.05,mats.wood);
-        const sideX=bx-bedW/2-0.18;
-        box(0.28,0.45,0.32,sideX,y+0.23,bz,mats.wood);
-        box(0.28,0.45,0.32,bx+bedW/2+0.18,y+0.23,bz,mats.wood);
-        box(0.65,0.7,0.42,b.minX+0.55,y+0.35,b.maxZ-0.55,mats.dark);
-      } else if (type === 'living' || type === 'lounge') {
-        const sofaW=Math.min(2.6,w*0.62), sofaD=Math.min(0.8,d*0.24);
-        box(sofaW,0.42,sofaD,c[0],y+0.25,b.minZ+d*0.28,mats.fabric);
-        box(sofaW,0.65,0.16,c[0],y+0.62,b.minZ+d*0.28-sofaD/2+0.08,mats.fabric);
-        box(0.85,0.3,0.55,c[0],y+0.18,b.minZ+d*0.62,mats.wood);
-        box(0.72,0.035,0.48,c[0],y+0.35,b.minZ+d*0.62,mats.white);
-        cyl(0.12,0.35,c[0]-0.55,y+0.18,b.minZ+d*0.62,mats.green);
-      } else if (type === 'dining') {
-        const tw=Math.min(1.8,w*0.62), td=Math.min(1.0,d*0.45);
-        box(tw,0.12,td,c[0],y+0.78,c[1],mats.wood);
-        [[-1,-1],[-1,1],[1,-1],[1,1]].forEach(([sx,sz])=>box(0.08,0.72,0.08,c[0]+sx*(tw/2-0.1),y+0.38,c[1]+sz*(td/2-0.1),mats.dark));
-        for (const sx of [-1,1]) for (const sz of [-1,1]) box(0.38,0.45,0.38,c[0]+sx*(tw/2+0.32),y+0.28,c[1]+sz*(td/2),mats.fabric);
-      } else if (type === 'kitchen') {
-        const kw=Math.min(2.0,w*0.7);
-        box(kw,0.9,0.62,c[0],y+0.45,b.minZ+0.55,mats.wood);
-        box(Math.min(1.7,w*0.6),0.9,0.75,c[0],y+0.45,c[1]+Math.min(0.45,d*0.18),mats.lightWood);
-        box(0.7,0.04,0.35,c[0],y+0.92,c[1]+Math.min(0.45,d*0.18),mats.metal);
-      } else if (type === 'bathroom') {
-        cyl(0.34,0.08,c[0]-0.35,y+0.04,c[1],mats.white);
-        box(0.68,0.42,0.62,c[0]+0.38,y+0.25,c[1],mats.white);
-        box(0.45,0.12,0.36,c[0]+0.1,y+0.82,b.maxZ-0.28,mats.white);
-      } else if (type === 'foyer' || type === 'corridor') {
-        box(Math.min(1.4,w*0.42),0.08,0.42,c[0],y+0.04,c[1],mats.wood);
-        cyl(0.13,0.35,c[0],y+0.2,c[1],mats.green);
-      }
-    }
-  }
-  scene.add(furniture);
-  return furniture;
-}
 
 export default function ModelViewer({ modelSpec, title }) {
   const mountRef = useRef(null);
@@ -144,7 +58,14 @@ export default function ModelViewer({ modelSpec, title }) {
   const briefBuilding = useMemo(() => (
     modelSpec?.designBrief ? generateBuildingFromBrief(modelSpec.designBrief) : null
   ), [modelSpec]);
-  const architecturalBuilding = demoBuilding || modelSpec?.building || briefBuilding || null;
+  const normalizedModelBuilding = useMemo(() => {
+    if (!modelSpec?.building) return null;
+    try { return normalizeBuilding(modelSpec.building); } catch (err) {
+      console.warn('[architecture engine] invalid supplied building; falling back to DesignBrief:', err);
+      return null;
+    }
+  }, [modelSpec]);
+  const architecturalBuilding = demoBuilding || (normalizedModelBuilding?.levels?.some(l => (l.walls || []).length > 0) ? normalizedModelBuilding : briefBuilding) || null;
 
   const parts = modelSpec?.parts || [];
   const hasRoof = architecturalBuilding ? true : parts.some(p => p.group === 'roof');
@@ -332,19 +253,6 @@ export default function ModelViewer({ modelSpec, title }) {
       const compound = buildCompoundWall(compoundSpan, compoundSpan, { gateWidth: Math.min(4, compoundSpan * 0.4) });
       compound.position.set(center.x, box.min.y, center.z);
       scene.add(compound);
-
-      // Interior presentation: lightweight furniture proxies make rooms read
-      // as actual designed spaces (living, dining, kitchen, bedrooms and
-      // bathrooms) rather than empty boxes. They are presentation geometry,
-      // not BIM entities, and are toggled with the interior cutaway.
-      const interiorFurniture = addInteriorFurnishings(scene, architecturalBuilding);
-      if (interiorFurniture) {
-        interiorFurniture.visible = hideRoof;
-        interiorFurniture.traverse(o => { if (o.isMesh) meshesRef.current.push(o); });
-      }
-      // Compound walls are presentation-only but must follow the cutaway
-      // state, so keep their leaf meshes in the same visibility registry.
-      compound.traverse(o => { if (o.isMesh) meshesRef.current.push(o); });
 
       // Soft interior fill light: off while the roof is on, brought up when
       // "Show interior" is toggled so rooms read clearly instead of relying
@@ -549,16 +457,22 @@ export default function ModelViewer({ modelSpec, title }) {
 
   useEffect(() => {
     meshesRef.current.forEach(m => {
-      if (m.userData.group === 'roof') m.visible = !hideRoof;
-      if (m.userData.group === 'compound') m.visible = !hideRoof;
-      if (m.userData.group === 'interior') {
-        m.visible = (!hideRoof || m.userData.roomPart !== 'ceiling');
+      const isRoof = m.userData.group === 'roof';
+      const isCeiling = m.userData.interiorSurface === 'ceiling';
+      const isExteriorWall = m.userData.wallType === 'exterior';
+      const isExteriorOpening = (m.userData.group === 'window' || m.userData.group === 'door') && m.userData.wallType === 'exterior';
+      // Interior mode is a presentation cutaway: remove the roof/ceiling and
+      // the exterior envelope so the actual rooms, interior walls and
+      // furniture are visible from the first camera angle.
+      if (hideRoof) {
+        if (isRoof || isCeiling || isExteriorWall || isExteriorOpening) m.visible = false;
+      } else {
+        if (isRoof || isCeiling || isExteriorWall || isExteriorOpening) m.visible = true;
       }
-      if (m.userData.group === 'interior-furniture') m.visible = hideRoof;
     });
-    // The interior mode is a true architectural cutaway: roof/ceiling and
-    // external compound walls are removed, while rooms, floors and furniture
-    // remain. Additional warm fill lights make the far rooms readable.
+    // Was "1.2", which is essentially invisible under physically-correct
+    // (candela) point-light units — that's the direct cause of the very
+    // dark/black interior floor in the "Show interior" screenshots.
     if (interiorFillRef.current) interiorFillRef.current.forEach(l => { l.intensity = hideRoof ? 55 : 0; });
   }, [hideRoof, modelSpec]);
 

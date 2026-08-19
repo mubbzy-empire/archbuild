@@ -15,6 +15,7 @@ import { buildSlabMesh, buildRoomFloorAndCeiling } from './floorSystem.js';
 import { buildStairGroup } from './stairSystem.js';
 import { buildRoofGroup } from './roofSystem.js';
 import { buildLevelComponents } from './componentSystem.js';
+import { buildInteriorFurniture } from './interiorFurniture.js';
 import { buildMepGroup } from './mepSystem.js';
 import { buildStructuralGroup } from './structuralSystem.js';
 import { solveWallNetwork } from './professionalGeometry.js';
@@ -56,135 +57,150 @@ import { normalizePhase34, generatePhase34Package, validatePhase34 } from './pha
 // warnings without blocking render.
 export function buildBuildingGroup(rawBuilding) {
   let building = normalizeBuilding(rawBuilding);
-  normalizeOpeningFamilies(building);
-  normalizeBimIdentity(building);
-  ensureParametricData(building);
-  deriveAssociativeDimensions(building);
-  deriveModelTags(building);
-  deriveLevelAndGridDatums(building);
-  phase7ProductionData(building);
-  normalizePhase8Data(building);
-  normalizePhase10(building);
-  normalizePhase12(building);
-  regenerateDocumentation(building);
-  deriveStructuralGrid(building, building.structural.grid.spacingX || 4, building.structural.grid.spacingZ || 4);
-  deriveFoundationSchedule(building);
-  deriveRoofConstruction(building);
-  deriveCeilingSystems(building);
-  deriveConstructionAssemblies(building);
-  deriveMepCoordination(building);
-  deriveIfcData(building);
-  normalizePhase12(building);
-  normalizePhase16(building);
-  regeneratePhase16(building, { reason: 'geometry-build' });
-  normalizePhase18(building);
-  normalizePhase19(building);
-  normalizePhase19Associativity(building);
-  normalizePhase20(building);
-  normalizePhase21(building);
-  normalizePhase22(building);
-  normalizePhase29(building);
-  normalizePhase30(building);
-  normalizePhase31(building);
-  normalizePhase32(building);
-  generatePhase32Documentation(building, { projectName: building.name || building.id });
-  normalizePhase33(building);
-  generatePhase33ExportManifest(building, { projectName: building.name || building.id });
-  normalizePhase34(building);
-  generatePhase34Package(building);
-  phase22AssociativeUpdate(building, 'geometry-build');
-  normalizePhase24(building);
-  regeneratePhase24(building, 'geometry-build');
-  normalizePhase25(building);
-  regeneratePhase25(building, 'geometry-build');
-  regeneratePhase12Associativity(building, 'geometry-build');
-  phase12Coordination(building);
-  building.levels.forEach(level => { solveWallNetwork(level); solveProfessionalWallJoins(level); });
-  const preReport = validateBuilding(building);
-  building = autoRepairBuilding(building);
-  const report = validateBuilding(building); // re-check after repair
-  report.phase22 = validatePhase22(building);
-  report.phase24 = validatePhase24(building);
-  report.phase25 = validatePhase25(building);
-  report.phase30 = validatePhase30(building);
-  report.phase31 = validatePhase31(building);
-  report.phase32 = validatePhase32(building);
-  report.phase33 = validatePhase33(building);
-  report.phase34 = validatePhase34(building);
+  let preReport = { valid: true, errors: [], warnings: [] };
+  let report = { valid: true, errors: [], warnings: [] };
+  const phaseWarnings = [];
+
+  // Advanced BIM/documentation phases are valuable, but a malformed AI or
+  // legacy object must never prevent the core architectural model from
+  // rendering. Run them as a protected preparation pipeline and fall back to
+  // the sanitized Building IR if one optional phase receives bad data.
+  try {
+    normalizeOpeningFamilies(building);
+    normalizeBimIdentity(building);
+    ensureParametricData(building);
+    deriveAssociativeDimensions(building);
+    deriveModelTags(building);
+    deriveLevelAndGridDatums(building);
+    phase7ProductionData(building);
+    normalizePhase8Data(building);
+    normalizePhase10(building);
+    normalizePhase12(building);
+    regenerateDocumentation(building);
+    deriveStructuralGrid(building, building.structural.grid.spacingX || 4, building.structural.grid.spacingZ || 4);
+    deriveFoundationSchedule(building);
+    deriveRoofConstruction(building);
+    deriveCeilingSystems(building);
+    deriveConstructionAssemblies(building);
+    deriveMepCoordination(building);
+    deriveIfcData(building);
+    normalizePhase12(building);
+    normalizePhase16(building);
+    regeneratePhase16(building, { reason: 'geometry-build' });
+    normalizePhase18(building);
+    normalizePhase19(building);
+    normalizePhase19Associativity(building);
+    normalizePhase20(building);
+    normalizePhase21(building);
+    normalizePhase22(building);
+    normalizePhase29(building);
+    normalizePhase30(building);
+    normalizePhase31(building);
+    normalizePhase32(building);
+    generatePhase32Documentation(building, { projectName: building.name || building.id });
+    normalizePhase33(building);
+    generatePhase33ExportManifest(building, { projectName: building.name || building.id });
+    normalizePhase34(building);
+    generatePhase34Package(building);
+    phase22AssociativeUpdate(building, 'geometry-build');
+    normalizePhase24(building);
+    regeneratePhase24(building, 'geometry-build');
+    normalizePhase25(building);
+    regeneratePhase25(building, 'geometry-build');
+    regeneratePhase12Associativity(building, 'geometry-build');
+    phase12Coordination(building);
+    building.levels.forEach(level => { solveWallNetwork(level); solveProfessionalWallJoins(level); });
+  } catch (err) {
+    const message = err?.message || String(err);
+    console.warn('[architecture engine] optional BIM preparation skipped:', message);
+    phaseWarnings.push(`Advanced BIM preparation skipped: ${message}`);
+    building = normalizeBuilding(building);
+  }
+
+  try { preReport = validateBuilding(building); } catch (err) { phaseWarnings.push(`Validation warning: ${err?.message || String(err)}`); }
+  try { building = autoRepairBuilding(building); } catch (err) { phaseWarnings.push(`Auto-repair warning: ${err?.message || String(err)}`); building = normalizeBuilding(building); }
+  try { report = validateBuilding(building); } catch (err) { report = { valid: true, errors: [], warnings: [] }; phaseWarnings.push(`Validation warning: ${err?.message || String(err)}`); }
+  const safePhase = (fn, fallback = { valid: true, errors: [], warnings: [] }) => {
+    try { return fn(); } catch (err) { phaseWarnings.push(`Optional phase skipped: ${err?.message || String(err)}`); return fallback; }
+  };
+  report.phase22 = safePhase(() => validatePhase22(building));
+  report.phase24 = safePhase(() => validatePhase24(building));
+  report.phase25 = safePhase(() => validatePhase25(building));
+  report.phase30 = safePhase(() => validatePhase30(building));
+  report.phase31 = safePhase(() => validatePhase31(building));
+  report.phase32 = safePhase(() => validatePhase32(building));
+  report.phase33 = safePhase(() => validatePhase33(building));
+  report.phase34 = safePhase(() => validatePhase34(building));
 
   const root = new THREE.Group();
   root.name = 'building';
   root.userData.buildingId = building.id;
   root.userData.isArchitecturalIR = true;
 
+  const safeAdd = (parent, factory, label) => {
+    try {
+      const child = factory();
+      if (child) parent.add(child);
+    } catch (err) {
+      phaseWarnings.push(`${label} skipped: ${err?.message || String(err)}`);
+      console.warn(`[architecture engine] ${label} skipped:`, err);
+    }
+  };
+
   building.levels.forEach((level, li) => {
     const levelGroup = new THREE.Group();
     levelGroup.name = `level_${level.index}`;
     levelGroup.userData.floorIndex = level.index;
     levelGroup.userData.floor = level.index;
-
-    levelGroup.add(buildSlabMesh(level, { isGround: li === 0 }));
-    levelGroup.add(buildLevelWalls(level));
-
+    safeAdd(levelGroup, () => buildSlabMesh(level, { isGround: li === 0 }), `Floor ${level.index} slab`);
+    safeAdd(levelGroup, () => buildLevelWalls(level), `Floor ${level.index} walls`);
     const interiorGroup = new THREE.Group();
     interiorGroup.name = `interior_floor_${level.index}`;
-    for (const room of level.rooms) {
-      interiorGroup.add(buildRoomFloorAndCeiling(room, level, room.floorFinish || 'tile'));
+    interiorGroup.userData.group = 'interior';
+    for (const room of level.rooms || []) {
+      safeAdd(interiorGroup, () => buildRoomFloorAndCeiling(room, level, room.floorFinish || 'tile'), `Room ${room.name || room.id} surfaces`);
+      safeAdd(interiorGroup, () => buildInteriorFurniture(room, level), `Room ${room.name || room.id} furniture`);
     }
     levelGroup.add(interiorGroup);
-    levelGroup.add(buildLevelComponents(level));
-
+    safeAdd(levelGroup, () => buildLevelComponents(level), `Floor ${level.index} components`);
     root.add(levelGroup);
   });
 
   const stairsGroup = new THREE.Group();
   stairsGroup.name = 'stairs';
-  for (const stair of building.stairs) {
+  for (const stair of building.stairs || []) {
     const from = building.levels.find((l) => l.index === stair.fromFloor);
     const to = building.levels.find((l) => l.index === stair.toFloor);
-    if (from && to) {
-      const stairGroup = buildStairGroup(stair, from, to);
-      stairGroup.userData.floor = stair.fromFloor; // ties the stair flight to its lower floor for story-view separation
-      stairsGroup.add(stairGroup);
-    }
+    if (from && to) safeAdd(stairsGroup, () => { const g = buildStairGroup(stair, from, to); g.userData.floor = stair.fromFloor; return g; }, `Stair ${stair.id || ''}`);
   }
   root.add(stairsGroup);
 
-  root.add(buildPhase22SpaceTopologyGroup(building));
-
+  safeAdd(root, () => buildPhase22SpaceTopologyGroup(building), 'Space topology');
   const top = topLevel(building);
-  if (top && building.roof) {
-    const roofGroup = buildRoofGroup(top, building.roof, top.elevation + top.height);
-    root.add(roofGroup);
-  }
+  if (top && building.roof) safeAdd(root, () => buildRoofGroup(top, building.roof, top.elevation + top.height), 'Roof');
+  safeAdd(root, () => buildStructuralGroup(building), 'Structural system');
+  safeAdd(root, () => buildTiedFoundationGroup(building), 'Foundation system');
+  safeAdd(root, () => buildCeilingSystemGroup(building), 'Ceiling system');
+  safeAdd(root, () => buildMepGroup(building), 'MEP system');
+  safeAdd(root, () => buildDisciplineRouteGroup(building), 'Discipline routes');
+  safeAdd(root, () => buildSiteCoordinationGroup(building), 'Site coordination');
+  safeAdd(root, () => buildPhase7ProductionGroup(building), 'Phase 7 production');
+  safeAdd(root, () => buildPhase8ProductionGroup(building), 'Phase 8 production');
+  safeAdd(root, () => buildAdvancedFoundationGroup(building), 'Advanced foundation');
+  safeAdd(root, () => buildAdvancedRoofGroup(building), 'Advanced roof');
+  safeAdd(root, () => buildAdvancedCeilingGroup(building), 'Advanced ceiling');
+  safeAdd(root, () => buildStructuralGridGroup(building), 'Structural grid');
+  safeAdd(root, () => buildDetailedMepGroup(building), 'Detailed MEP');
+  safeAdd(root, () => buildPhase12ConstructionGroup(building), 'Phase 12 construction');
+  safeAdd(root, () => buildPhase18ConstructionGroup(building), 'Phase 18 construction');
+  safeAdd(root, () => buildPhase19ComponentDetailGroup(building), 'Phase 19 components');
+  safeAdd(root, () => buildPhase19WallFaceGuides(building), 'Phase 19 wall guides');
+  safeAdd(root, () => buildPhase20AuthoringHandles(building), 'Phase 20 handles');
+  safeAdd(root, () => buildPhase21LayeredWallGroup(building), 'Phase 21 layered walls');
+  safeAdd(root, () => buildPhase21FaceHandles(building), 'Phase 21 face handles');
+  safeAdd(root, () => buildPhase24ConstructionGroup(building), 'Phase 24 construction');
+  safeAdd(root, () => buildPhase25MepGroup(building), 'Phase 25 MEP');
 
-  root.add(buildStructuralGroup(building));
-  root.add(buildTiedFoundationGroup(building));
-  root.add(buildCeilingSystemGroup(building));
-  root.add(buildMepGroup(building));
-  root.add(buildDisciplineRouteGroup(building));
-  root.add(buildSiteCoordinationGroup(building));
-  root.add(buildPhase7ProductionGroup(building));
-  root.add(buildPhase8ProductionGroup(building));
-  root.add(buildAdvancedFoundationGroup(building));
-  root.add(buildAdvancedRoofGroup(building));
-  root.add(buildAdvancedCeilingGroup(building));
-  root.add(buildStructuralGridGroup(building));
-  root.add(buildDetailedMepGroup(building));
-  root.add(buildPhase12ConstructionGroup(building));
-  root.add(buildPhase18ConstructionGroup(building));
-  root.add(buildPhase19ComponentDetailGroup(building));
-  root.add(buildPhase19WallFaceGuides(building));
-  root.add(buildPhase20AuthoringHandles(building));
-  root.add(buildPhase21LayeredWallGroup(building));
-  root.add(buildPhase21FaceHandles(building));
-  root.add(buildPhase24ConstructionGroup(building));
-  root.add(buildPhase25MepGroup(building));
-
-  // Safety net: any leaf mesh that wasn't explicitly tagged by its builder
-  // inherits its nearest ancestor group's userData.group, so the viewer's
-  // per-group recolor and "show interior" roof toggle (which key off each
-  // mesh's own userData.group) never silently miss a mesh.
   root.traverse((obj) => {
     if (!obj.isMesh) return;
     if (!obj.userData.group) {
@@ -192,19 +208,11 @@ export function buildBuildingGroup(rawBuilding) {
       while (ancestor && !ancestor.userData.group) ancestor = ancestor.parent;
       if (ancestor) obj.userData.group = ancestor.userData.group;
     }
-    // Same inheritance for floor number, so the "separate floors" story
-    // view (which reads each mesh's own userData.floor) moves every mesh
-    // on a level — walls, openings, stair flight, interior fittings — as
-    // one unit, not just the ones a builder happened to tag directly.
     if (obj.userData.floor == null) {
       let ancestor = obj.parent;
       while (ancestor && ancestor.userData.floor == null) ancestor = ancestor.parent;
       if (ancestor) obj.userData.floor = ancestor.userData.floor;
     }
-    // Same for material label and room name — lets PartInfoPanel show real
-    // info (e.g. "glazing" / "Master Bedroom") for a window's individual
-    // glass/frame meshes, which openingSystem.js only tags on the opening's
-    // parent Group, not each leaf mesh inside it.
     if (!obj.userData.material) {
       let ancestor = obj.parent;
       while (ancestor && !ancestor.userData.material) ancestor = ancestor.parent;
@@ -217,11 +225,8 @@ export function buildBuildingGroup(rawBuilding) {
     }
   });
 
-  return {
-    group: root,
-    building,
-    report: { ...report, phase6: validatePhase6(building), phase7: validatePhase7(building), phase8: validatePhase8(building), phase10: validatePhase10(building), phase12: validatePhase12(building), phase16: validatePhase16(building), phase18: validatePhase18(building), phase19: validatePhase19(building), phase20: validatePhase20(building), phase21: validatePhase21(building), phase29: validatePhase29(building), phase30: validatePhase30(building), phase31: validatePhase31(building), phase32: validatePhase32(building), phase33: validatePhase33(building), phase34: validatePhase34(building), warnings: [...new Set([...preReport.warnings, ...report.warnings, ...validatePhase6(building).warnings, ...validatePhase7(building).warnings, ...validatePhase8(building).warnings, ...validatePhase10(building).warnings, ...validatePhase12(building).warnings, ...validatePhase16(building).warnings, ...validatePhase18(building).warnings, ...validatePhase19(building).warnings, ...validatePhase20(building).warnings, ...validatePhase21(building).warnings, ...validatePhase29(building).warnings])] },
-  };
+  const allWarnings = [...new Set([...(preReport.warnings || []), ...(report.warnings || []), ...phaseWarnings])];
+  return { group: root, building, report: { ...report, warnings: allWarnings } };
 }
 
 // Utility for the floor-isolation UI (section 28 of the spec): show only
