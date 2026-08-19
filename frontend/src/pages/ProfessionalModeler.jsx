@@ -16,7 +16,7 @@ import { phase5ModelReport, wallJoinReport, roofPlaneSchedule } from '../three/a
 import { bimManifest, materialAssemblies } from '../three/architecture/bimData.js';
 import { ensureParametricData, deriveAssociativeDimensions, deriveModelTags, deriveLevelAndGridDatums, wallAssemblySchedule, phase6Manifest, validatePhase6, PHASE6_SCHEMA } from '../three/architecture/phase6Systems.js';
 import { phase7ProductionData, phase7Manifest, validatePhase7, PHASE7_SCHEMA, stairProductionCheck } from '../three/architecture/phase7Systems.js';
-import { regenerateDocumentation, phase8Manifest, validatePhase8, PHASE8_SCHEMA, editWall, offsetWall, trimWallTo, deriveViewDefinitions, deriveDrawingSheets } from '../three/architecture/phase8Systems.js';
+import { regenerateDocumentation, phase8Manifest, validatePhase8, PHASE8_SCHEMA, editWall, deriveViewDefinitions, deriveDrawingSheets } from '../three/architecture/phase8Systems.js';
 import { saveManualProject } from '../api/client';
 import { regeneratePhase9Documentation, validatePhase9, phase9Manifest, PHASE9_SCHEMA, deriveArchitecturalDimensions, derivePlanAnnotations, deriveSectionMarkers } from '../three/architecture/phase9Systems.js';
 import { normalizePhase10, deriveStructuralGrid, deriveFoundationSchedule, deriveRoofConstruction, deriveCeilingSystems, deriveConstructionAssemblies, deriveMepCoordination, deriveIfcData, phase10Manifest, validatePhase10, PHASE10_SCHEMA } from '../three/architecture/phase10Systems.js';
