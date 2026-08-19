@@ -173,21 +173,49 @@ export default function ModelViewer({ modelSpec, title }) {
         meshes.forEach(m => group.add(m));
       }
       // A successful scene build must contain actual renderable geometry.
-      // Previously an empty/invalid architectural group could leave the
-      // viewer showing only the sky backdrop, which looked like a successful
-      // render even though the model itself was missing.
+      // Some of the professional/coordination subsystems can emit optional
+      // helper meshes; if one of those contains a non-finite vertex it must
+      // not poison the entire scene's bounding box. Keep valid architectural
+      // meshes and drop only the malformed leaf mesh.
       if (!meshes.length) throw new Error('The 3D engine produced no renderable model meshes.');
-      meshes.forEach((m) => { m.visible = true; });
+      const invalidMeshes = [];
+      const isFiniteGeometry = (mesh) => {
+        const position = mesh.geometry?.getAttribute?.('position');
+        if (!position || !position.count) return false;
+        for (let i = 0; i < position.count; i++) {
+          if (!Number.isFinite(position.getX(i)) || !Number.isFinite(position.getY(i)) || !Number.isFinite(position.getZ(i))) return false;
+        }
+        return true;
+      };
+      meshes = meshes.filter((m) => {
+        const ok = isFiniteGeometry(m);
+        if (!ok) { invalidMeshes.push(m); m.removeFromParent(); }
+        return ok;
+      });
+      if (!meshes.length) throw new Error('The 3D engine produced no valid renderable model geometry.');
+      if (invalidMeshes.length) console.warn(`[architecture engine] skipped ${invalidMeshes.length} malformed mesh(es).`);
+      meshes.forEach((m) => { m.visible = true; m.updateMatrixWorld(true); });
       meshesRef.current = meshes;
       scene.add(group);
 
       // Frame ONLY the architectural model here. Ground, compound walls and
       // presentation helpers are added afterwards and must never influence
-      // the camera target/framing. Guard against invalid bounds so a NaN/
-      // infinite coordinate cannot silently point the camera into empty sky.
-      const box = new THREE.Box3().setFromObject(group);
+      // the camera target/framing. Compute bounds from valid mesh geometry
+      // only, rather than letting one NaN/Infinity vertex poison Box3.
+      const box = new THREE.Box3();
+      let hasFiniteBounds = false;
+      const meshBox = new THREE.Box3();
+      for (const mesh of meshes) {
+        mesh.updateWorldMatrix(true, false);
+        meshBox.setFromObject(mesh);
+        const vals = [meshBox.min.x, meshBox.min.y, meshBox.min.z, meshBox.max.x, meshBox.max.y, meshBox.max.z];
+        if (!vals.every(Number.isFinite)) continue;
+        if (!hasFiniteBounds) { box.copy(meshBox); hasFiniteBounds = true; }
+        else box.union(meshBox);
+      }
       const size = new THREE.Vector3();
       const center = new THREE.Vector3();
+      if (!hasFiniteBounds) throw new Error('The 3D engine produced no finite geometry bounds.');
       box.getSize(size);
       box.getCenter(center);
       const finiteBounds = [box.min.x, box.min.y, box.min.z, box.max.x, box.max.y, box.max.z, center.x, center.y, center.z, size.x, size.y, size.z].every(Number.isFinite);
