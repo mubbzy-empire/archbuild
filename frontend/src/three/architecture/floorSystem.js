@@ -42,6 +42,7 @@ export function buildRoomFloorAndCeiling(room, level, floorFinish = 'tile') {
   floorMesh.receiveShadow = true;
   floorMesh.userData.group = 'interior';
   floorMesh.userData.room = room.name;
+  floorMesh.userData.roomPart = 'floor';
   group.add(floorMesh);
 
   const ceilH = room.ceilingHeight || level.height - 0.05;
@@ -51,6 +52,7 @@ export function buildRoomFloorAndCeiling(room, level, floorFinish = 'tile') {
   ceilMesh.position.y = level.elevation + ceilH;
   ceilMesh.userData.group = 'interior';
   ceilMesh.userData.room = room.name;
+  ceilMesh.userData.roomPart = 'ceiling';
   group.add(ceilMesh);
 
   // Skirting board around the room perimeter — small but it's the detail
