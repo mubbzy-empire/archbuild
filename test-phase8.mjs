@@ -1,0 +1,11 @@
+import { generateBuildingFromBrief } from './frontend/src/three/architecture/designBriefToBuilding.js';
+import { regenerateDocumentation, validatePhase8, phase8Manifest, editWall, offsetWall } from './frontend/src/three/architecture/phase8Systems.js';
+const b=generateBuildingFromBrief({floors:2,bedrooms:3,footprint:{width:12,depth:10},roofType:'hip'});
+regenerateDocumentation(b);
+const wall=b.levels[0].walls[0];
+editWall(b.levels[0],wall.id,{end:[wall.end[0]+0.2,wall.end[1]]});
+offsetWall(b.levels[0],wall.id,0.05);
+const q=validatePhase8(b);
+const m=phase8Manifest(b);
+console.log(JSON.stringify({valid:q.valid,errors:q.errors,warnings:q.warnings,views:m.views.length,sheets:m.sheets.length,dimensions:m.dimensions.length,tags:m.tags.length,constraints:m.constraints.length},null,2));
+if(!q.valid) process.exit(1);

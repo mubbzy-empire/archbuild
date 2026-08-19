@@ -1,0 +1,7 @@
+import { generateBuildingFromBrief } from './frontend/src/three/architecture/designBriefToBuilding.js';
+import { normalizePhase13, buildDependencyGraph, calculateConstructionTakeoff, beginTransaction, commitTransaction, moveWallGrip, createModelVersion, restoreModelVersion, validatePhase13, phase13Manifest } from './frontend/src/three/architecture/phase13Systems.js';
+const b=generateBuildingFromBrief({name:'Phase 13 Test',floors:2,floorHeight:3,footprint:{width:12,depth:10},bedrooms:4,bathrooms:3,roofType:'hip',style:'modern',features:{garage:true,balcony:true,porch:true},systems:{}});
+b.documentation={dimensions:[],tags:[]}; normalizePhase13(b); buildDependencyGraph(b); calculateConstructionTakeoff(b);
+const wall=b.levels[0].walls[0]; const before=wall.start.slice(); const tx=beginTransaction(b,'Move wall grip'); moveWallGrip(b,wall.id,b.levels[0].index,'start',[0.25,0]); commitTransaction(b,tx,[{kind:'wall',id:wall.id,level:b.levels[0].index}],'Move wall grip'); calculateConstructionTakeoff(b); const v=createModelVersion(b,'Checkpoint'); const restored=restoreModelVersion(b,v.id); const q=validatePhase13(b); const m=phase13Manifest(b);
+console.log(JSON.stringify({schema:b.metadata.schema,wallMoved:before.join(',')!==wall.start.join(','),dependencies:b.phase13.dependencies.length,version:b.phase13.version,takeoff:b.phase13.takeoff,versions:b.phase13.versions.length,restored:!!restored,valid:q.valid,errors:q.errors,warnings:q.warnings,manifestSchema:m.schema},null,2));
+if(!q.valid) process.exit(1);

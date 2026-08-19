@@ -1,0 +1,11 @@
+import { createBuilding, createLevel, createWall, addOpening } from './frontend/src/three/architecture/buildingModel.js';
+import { phase7ProductionData, validatePhase7, phase7Manifest, stairProductionCheck, trimExtendWall, miterJoin } from './frontend/src/three/architecture/phase7Systems.js';
+const a=createWall({id:'w1',start:[0,0],end:[6,0],thickness:.2});
+const b=createWall({id:'w2',start:[6,0],end:[6,4],thickness:.2});
+addOpening(a,{id:'d1',type:'door',offsetAlongWall:3,width:.9,height:2.1});
+const l1=createLevel({index:1,elevation:0,height:3,footprint:[[0,0],[6,0],[6,4],[0,4]],walls:[a,b]});
+const l2=createLevel({index:2,elevation:3,height:3,footprint:[[0,0],[6,0],[6,4],[0,4]],walls:[]});
+const bld=createBuilding({name:'Phase 7 Test',levels:[l1,l2],stairs:[{id:'s1',fromFloor:1,toFloor:2,width:1.1,riserHeight:.17,treadDepth:.28,position:[1,3]}],roof:{type:'hip',pitchDeg:25}});
+phase7ProductionData(bld);
+const q=validatePhase7(bld);
+console.log(JSON.stringify({valid:q.valid,joins:bld.documentation.production.wallJoins.length,roofPlanes:bld.roofPlanes.length,stairs:bld.stairProduction[0].risers,manifest:phase7Manifest(bld).schema,miter:miterJoin(a,b).type,trim:trimExtendWall(a,b,'extend').end},null,2));

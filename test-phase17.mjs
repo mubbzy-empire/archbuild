@@ -1,0 +1,6 @@
+import { generateBuildingFromBrief } from './frontend/src/three/architecture/designBriefToBuilding.js';
+import { normalizePhase17, createParallelWall, splitWallAt, setOpeningFamily, resolveWallTopology, phase17Manifest, validatePhase17 } from './frontend/src/three/architecture/phase17Systems.js';
+const b=generateBuildingFromBrief({name:'Phase 17 Test',floors:1,floorHeight:3,footprint:{width:12,depth:10},bedrooms:3,bathrooms:2,roofType:'hip',style:'modern',features:{}});
+normalizePhase17(b);const l=b.levels[0];const w=l.walls[0];const before=l.walls.length;createParallelWall(b,{levelIndex:0,wallId:w.id,distance:.3,side:1});splitWallAt(b,{levelIndex:0,wallId:w.id,point:[(w.start[0]+w.end[0])/2,(w.start[1]+w.end[1])/2]});resolveWallTopology(b,{levelIndex:0});
+const first=l.walls[0];if(first.openings?.[0])setOpeningFamily(b,{levelIndex:0,wallId:first.id,openingId:first.openings[0].id,family:'sliding'});
+const q=validatePhase17(b);const m=phase17Manifest(b);if(!q.valid)throw new Error(JSON.stringify(q));if(!m.schema.includes('1.7'))throw new Error('schema');console.log(JSON.stringify({valid:q.valid,errors:q.errors,warnings:q.warnings,wallsBefore:before,wallsAfter:l.walls.length,joins:m.wallTopology.joins.length,operations:m.wallTopology.operations,schema:m.schema},null,2));
