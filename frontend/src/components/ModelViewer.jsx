@@ -552,7 +552,7 @@ export default function ModelViewer({ modelSpec, title }) {
       if (m.userData.group === 'roof') m.visible = !hideRoof;
       if (m.userData.group === 'compound') m.visible = !hideRoof;
       if (m.userData.group === 'interior') {
-        m.visible = showInterior && (!hideRoof || m.userData.roomPart !== 'ceiling');
+        m.visible = (!hideRoof || m.userData.roomPart !== 'ceiling');
       }
       if (m.userData.group === 'interior-furniture') m.visible = hideRoof;
     });
@@ -560,7 +560,7 @@ export default function ModelViewer({ modelSpec, title }) {
     // external compound walls are removed, while rooms, floors and furniture
     // remain. Additional warm fill lights make the far rooms readable.
     if (interiorFillRef.current) interiorFillRef.current.forEach(l => { l.intensity = hideRoof ? 55 : 0; });
-  }, [hideRoof, modelSpec, showInterior]);
+  }, [hideRoof, modelSpec]);
 
   useEffect(() => {
     meshesRef.current.forEach(m => {
