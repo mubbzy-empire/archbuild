@@ -1,4 +1,4 @@
-# ArchVision Professional
+# Arch-3d build
 
 Upload a blueprint (or describe a design in chat) and get:
 
@@ -48,7 +48,7 @@ That's the only prerequisite — SQLite is embedded, no separate database server
 ## 2. Unzip and install
 
 ```bash
-cd path/to/ArchVision-Phase38-Repo
+cd path/to/archview
 npm run install:all
 ```
 

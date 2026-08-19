@@ -1,0 +1,14 @@
+{
+  "schema": "archvision-bim-1.19",
+  "entities": {
+    "wall": 4,
+    "room": 1,
+    "door": 1,
+    "room-evidence": 1
+  },
+  "walls": 4,
+  "rooms": 1,
+  "eligible": true,
+  "errors": 0,
+  "warnings": 0
+}

@@ -1,0 +1,12 @@
+{
+  "schema": "archvision-bim-1.10",
+  "valid": true,
+  "errors": [],
+  "warnings": [],
+  "operations": 4,
+  "history": 4,
+  "wallLengthBefore": 12,
+  "wallLengthAfter": 12,
+  "wallThickness": 0.24000000000000002,
+  "manifestSchema": "archvision-bim-1.10"
+}

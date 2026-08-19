@@ -1,0 +1,13 @@
+{
+  "schema": "archvision-bim-1.6",
+  "operations": 4,
+  "offsetMoved": true,
+  "trimmed": true,
+  "extended": true,
+  "affected": 2,
+  "qa": {
+    "valid": true,
+    "errors": [],
+    "warnings": []
+  }
+}

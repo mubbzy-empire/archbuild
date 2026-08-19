@@ -1,0 +1,15 @@
+{
+  "schema": "archvision-bim-1.16",
+  "materials": 14,
+  "assemblies": 15,
+  "floorArea": 240,
+  "wallNetArea": 292.11,
+  "roofArea": 280,
+  "doors": 1,
+  "windows": 0,
+  "qa": {
+    "valid": true,
+    "errors": [],
+    "warnings": []
+  }
+}

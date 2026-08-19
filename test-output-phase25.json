@@ -1,0 +1,15 @@
+{
+  "schema": "archvision-bim-1.15",
+  "networks": 24,
+  "routes": 19,
+  "fittings": 6,
+  "risers": 2,
+  "penetrations": 4,
+  "equipment": 21,
+  "clashes": 0,
+  "qa": {
+    "valid": true,
+    "errors": [],
+    "warnings": []
+  }
+}

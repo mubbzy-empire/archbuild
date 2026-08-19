@@ -1,0 +1,33 @@
+{
+  "schema": "archvision-bim-1.3",
+  "wallMoved": true,
+  "dependencies": 22,
+  "version": 2,
+  "takeoff": {
+    "walls": {
+      "lengthM": 198.545,
+      "grossAreaM2": 595.635,
+      "netAreaM2": 557.17,
+      "volumeM3": 97.192
+    },
+    "openings": {
+      "count": 20,
+      "areaM2": 38.465,
+      "doors": 9,
+      "windows": 9
+    },
+    "floors": {
+      "areaM2": 240
+    },
+    "roof": {
+      "areaM2": 0
+    },
+    "generatedAt": "2026-08-19T02:09:45.175Z"
+  },
+  "versions": 1,
+  "restored": true,
+  "valid": true,
+  "errors": [],
+  "warnings": [],
+  "manifestSchema": "archvision-bim-1.3"
+}
